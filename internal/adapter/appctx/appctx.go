@@ -17,11 +17,11 @@ func (c appCtx) Context() context.Context {
 	return c.ctx
 }
 
-func (c appCtx) Session() usecase.Session {
-	session, ok := c.ctx.Value(SessionKey{}).(usecase.Session)
+func (c appCtx) Transaction() usecase.Transaction {
+	ts, ok := c.ctx.Value(TransactionKey{}).(usecase.Transaction)
 	if !ok {
-		panic(errSessionNotFound)
+		panic(errTransactionNotFound)
 	}
 
-	return session
+	return ts
 }

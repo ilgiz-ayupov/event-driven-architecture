@@ -17,6 +17,11 @@ type ErrorResponse struct {
 	Error string
 }
 
+// SendData отправляет статус код
+func SendStatus(c *gin.Context, statusCode int) {
+	c.Status(statusCode)
+}
+
 // SendData отправляет успешный ответ
 func SendData(c *gin.Context, statusCode int, data *any) {
 	response := SuccessResponse{Data: data}
@@ -34,6 +39,12 @@ func SendError(c *gin.Context, err error) {
 
 func mapErrorToStatus(err error) (code int) {
 	switch err {
+	case usecase.ErrNoData:
+		return http.StatusNotFound
+
+	case usecase.ErrUnauthorized:
+		return http.StatusUnauthorized
+
 	case usecase.ErrInternalError:
 		return http.StatusInternalServerError
 

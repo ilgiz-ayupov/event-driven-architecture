@@ -3,5 +3,5 @@ package appctx
 import "errors"
 
 var (
-	errSessionNotFound = errors.New("сессия не найдена в контексте")
+	errTransactionNotFound = errors.New("транзакция не найдена в контексте")
 )

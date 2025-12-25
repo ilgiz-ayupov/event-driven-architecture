@@ -7,26 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type SSEController struct {
-	log    usecase.Logger
-	broker usecase.EventBroker
-}
+func (e *HTTPServer) sseHandler(c *gin.Context) {
+	sessionID := c.MustGet("session_id").(string)
 
-func NewSSEController(
-	log usecase.Logger,
-	broker usecase.EventBroker,
-) *SSEController {
-	return &SSEController{
-		log:    log,
-		broker: broker,
-	}
-}
-
-func (e *SSEController) RegisterRoutes(engine *gin.Engine) {
-	engine.GET("/events", e.handler)
-}
-
-func (e *SSEController) handler(c *gin.Context) {
 	w := c.Writer
 	r := c.Request
 
@@ -40,15 +23,24 @@ func (e *SSEController) handler(c *gin.Context) {
 		return
 	}
 
-	subscriberID, ch := e.broker.Subscribe()
-	defer e.broker.Unsubscribe(subscriberID)
+	subscription := e.broker.Subscribe(sessionID)
+	defer subscription.Close()
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 
-		case msg, ok := <-ch:
+		case msg, ok := <-subscription.Channel():
+			e.log.Info(
+				"SSE-хендлер: получение сообщения для отправки",
+				"session_id", sessionID,
+				"message_size", len(msg),
+				"subscription_id", subscription.ID(),
+				"active", ok,
+				"msg", string(msg),
+			)
+
 			if !ok {
 				// канал закрыт брокером
 				return

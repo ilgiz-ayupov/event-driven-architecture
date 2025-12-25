@@ -10,6 +10,6 @@ func newAppCtxOptionWriter(opts *options) usecase.AppCtxOptionWriter {
 	return &appCtxOptionWriter{opts: opts}
 }
 
-func (w *appCtxOptionWriter) SetSession(session usecase.Session) {
-	w.opts.session = session
+func (w *appCtxOptionWriter) SetTransaction(ts usecase.Transaction) {
+	w.opts.ts = ts
 }

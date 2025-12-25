@@ -22,8 +22,8 @@ func (cm appCtxManager) CreateContext(parent context.Context, opts ...usecase.Ap
 
 	ctx, cancel := context.WithTimeout(parent, cm.timeout)
 
-	if options.session != nil {
-		ctx = context.WithValue(ctx, SessionKey{}, options.session)
+	if options.ts != nil {
+		ctx = context.WithValue(ctx, TransactionKey{}, options.ts)
 	}
 
 	return newContext(ctx), cancel

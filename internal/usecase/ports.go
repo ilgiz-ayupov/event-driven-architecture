@@ -12,27 +12,27 @@ type AppCtxOption interface {
 }
 
 type AppCtxOptionWriter interface {
-	SetSession(session Session)
+	SetTransaction(ts Transaction)
 }
 
 type AppCtx interface {
 	Context() context.Context
-	Session() Session
+	Transaction() Transaction
 }
 
 type AppCtxManager interface {
 	CreateContext(parent context.Context, opts ...AppCtxOption) (AppCtx, context.CancelFunc)
 }
 
-type Session interface {
+type Transaction interface {
 	Start() error
 	Rollback() error
 	Commit() error
 	Tx() *sqlx.Tx
 }
 
-type SessionManager interface {
-	CreateSession() Session
+type TransactionManager interface {
+	CreateTransaction() Transaction
 	Close() error
 }
 
@@ -45,16 +45,22 @@ type Logger interface {
 
 type Event interface {
 	EventType() string
+	UserID() string
 }
 
 type EventPublisher interface {
-	Publish(event Event) error
+	Publish(ctx AppCtx, event Event) error
+}
+
+type EventSubscription interface {
+	Channel() <-chan []byte
+	Close()
+	ID() string
 }
 
 type EventBroker interface {
-	Subscribe() (subscriberID string, ch <-chan []byte)
-	Unsubscribe(subscriberID string)
-	Broadcast(msg []byte)
+	Subscribe(sessionID string) EventSubscription
+	SendToSession(sessionID string, msg []byte)
 }
 
 type IDGenerator interface {
@@ -69,4 +75,16 @@ type PasswordHasher interface {
 type UserRepo interface {
 	Create(ctx AppCtx, user domain.User) error
 	FindByEmail(ctx AppCtx, email string) (domain.User, error)
+}
+
+type SessionRepo interface {
+	Create(ctx AppCtx, session domain.Session) error
+	Find(ctx AppCtx, sessionID string) (domain.Session, error)
+	Delete(ctx AppCtx, sessionID string) error
+}
+
+type SessionIndexRepo interface {
+	Add(ctx AppCtx, sessionID, userID string) error
+	Remove(ctx AppCtx, sessionID string) error
+	SessionsByUser(ctx AppCtx, userID string) ([]string, error)
 }

@@ -3,7 +3,7 @@ package appctx
 import "event-driven-architecture/internal/usecase"
 
 type options struct {
-	session usecase.Session
+	ts usecase.Transaction
 }
 
-type SessionKey struct{}
+type TransactionKey struct{}

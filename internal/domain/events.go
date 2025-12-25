@@ -1,17 +1,21 @@
 package domain
 
 type UserCreatedEvent struct {
-	UserID string
 	Email  string
+	userID string
 }
 
-func (UserCreatedEvent) EventType() string {
+func (e UserCreatedEvent) EventType() string {
 	return "user.created"
 }
 
-func NewUserCreatedEvent(userID, email string) UserCreatedEvent {
+func (e UserCreatedEvent) UserID() string {
+	return e.userID
+}
+
+func NewUserCreatedEvent(email, userID string) UserCreatedEvent {
 	return UserCreatedEvent{
-		UserID: userID,
 		Email:  email,
+		userID: userID,
 	}
 }

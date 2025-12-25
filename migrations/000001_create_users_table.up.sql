@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS users (
-    user_id VARCHAR(100) PRIMARY KEY
-    , email VARCHAR(100) UNIQUE NOT NULL
-    , password_hash VARCHAR(100) NOT NULL
+    user_id UUID PRIMARY KEY
+    , email TEXT UNIQUE NOT NULL
+    , password_hash TEXT NOT NULL
+    , created_at TIMESTAMP NOT NULL
 );

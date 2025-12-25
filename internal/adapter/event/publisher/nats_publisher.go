@@ -1,30 +1,22 @@
 package publisher
 
-import (
-	"encoding/json"
-	"event-driven-architecture/internal/usecase"
-	"fmt"
+// type natsPublisher struct {
+// 	conn *nats.Conn
+// }
 
-	"github.com/nats-io/nats.go"
-)
+// func NewNATSPublisher(
+// 	conn *nats.Conn,
+// ) usecase.EventPublisher {
+// 	return &natsPublisher{
+// 		conn: conn,
+// 	}
+// }
 
-type natsPublisher struct {
-	conn *nats.Conn
-}
+// func (p *natsPublisher) Publish(event usecase.Event) error {
+// 	data, err := json.Marshal(event)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to marshal event: %w", err)
+// 	}
 
-func NewNATSPublisher(
-	conn *nats.Conn,
-) usecase.EventPublisher {
-	return &natsPublisher{
-		conn: conn,
-	}
-}
-
-func (p *natsPublisher) Publish(event usecase.Event) error {
-	data, err := json.Marshal(event)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
-	}
-
-	return p.conn.Publish(event.EventType(), data)
-}
+// 	return p.conn.Publish(event.EventType(), data)
+// }

@@ -1,6 +1,9 @@
 package infrastructure
 
 import (
+	"context"
+	"time"
+
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -12,7 +15,10 @@ func NewPostgres(dsn string) (*sqlx.DB, error) {
 	}
 
 	// проверить соединение
-	if err := db.Ping(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
 		return nil, err
 	}
 

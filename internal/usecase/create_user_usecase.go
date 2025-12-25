@@ -1,14 +1,11 @@
 package usecase
 
 import (
-	"context"
 	"event-driven-architecture/internal/domain"
 )
 
 type CreateUserUseCase struct {
 	log            Logger
-	sessionManager SessionManager
-	appCtxManager  AppCtxManager
 	eventPublisher EventPublisher
 	idGenerator    IDGenerator
 	passwordHasher PasswordHasher
@@ -18,8 +15,6 @@ type CreateUserUseCase struct {
 
 func NewCreateUser(
 	log Logger,
-	sessionManager SessionManager,
-	appCtxManager AppCtxManager,
 	eventPublisher EventPublisher,
 	idGenerator IDGenerator,
 	passwordHasher PasswordHasher,
@@ -28,8 +23,6 @@ func NewCreateUser(
 ) *CreateUserUseCase {
 	return &CreateUserUseCase{
 		log:            log,
-		sessionManager: sessionManager,
-		appCtxManager:  appCtxManager,
 		eventPublisher: eventPublisher,
 		idGenerator:    idGenerator,
 		passwordHasher: passwordHasher,
@@ -38,24 +31,29 @@ func NewCreateUser(
 	}
 }
 
-func (u *CreateUserUseCase) Execute(ctx context.Context, email, password string) error {
-	// открыть сессию
-	session := u.sessionManager.CreateSession()
-	if err := session.Start(); err != nil {
-		u.log.Error("не удалось открыть транзакцию", "error", err)
-		return ErrInternalError
+type CreateUserInput struct {
+	Email    string
+	Password string
+
+	UserLog UserLog
+}
+
+func NewCreateUserInput(
+	email string,
+	password string,
+	userLog UserLog,
+) CreateUserInput {
+	return CreateUserInput{
+		Email:    email,
+		Password: password,
+
+		UserLog: userLog,
 	}
-	defer session.Rollback()
+}
 
-	// сформировать контекст
-	appCtx, cancel := u.appCtxManager.CreateContext(
-		ctx,
-		WithSession(session),
-	)
-	defer cancel()
-
+func (u *CreateUserUseCase) Execute(ctx AppCtx, in CreateUserInput) error {
 	// хешировать пароль
-	hash, err := u.passwordHasher.Hash(password)
+	hash, err := u.passwordHasher.Hash(in.Password)
 	if err != nil {
 		u.log.Error("не удалось хешировать пароль", "error", err)
 		return ErrInternalError
@@ -64,22 +62,22 @@ func (u *CreateUserUseCase) Execute(ctx context.Context, email, password string)
 	// сохранить пользователя
 	user := domain.NewUser(
 		u.idGenerator.NewID(),
-		email,
+		in.Email,
 		hash,
 	)
 
-	if err := u.userRepo.Create(appCtx, user); err != nil {
+	if err := u.userRepo.Create(ctx, user); err != nil {
 		u.log.Error("не удалось сохранить пользователя", "error", err)
 		return ErrInternalError
 	}
 
 	// опубликовать событие - пользователь создан
 	event := domain.NewUserCreatedEvent(
-		user.ID,
-		user.Email,
+		in.Email,
+		in.UserLog.UserID,
 	)
 
-	if err := u.eventPublisher.Publish(event); err != nil {
+	if err := u.eventPublisher.Publish(ctx, event); err != nil {
 		u.log.Error(
 			"не удалось опубликовать событие",
 			"error", err,
@@ -94,16 +92,10 @@ func (u *CreateUserUseCase) Execute(ctx context.Context, email, password string)
 		)
 	}
 
-	// зафиксировать сессию
-	if err := session.Commit(); err != nil {
-		u.log.Error("не удалось зафиксировать сессию", "error", err)
-		return ErrInternalError
-	}
-
 	// вернуть результат
 	u.log.Info(
 		"пользователь создан",
-		"user_id", user.ID,
+		"user_id", in.UserLog.UserID,
 	)
 
 	return nil

@@ -12,26 +12,38 @@ import (
 )
 
 type HTTPServer struct {
-	log     usecase.Logger
-	address string
-	broker  usecase.EventBroker
+	log                usecase.Logger
+	address            string
+	transactionManager usecase.TransactionManager
+	appCtxManager      usecase.AppCtxManager
+	broker             usecase.EventBroker
 
-	createUserUseCase *usecase.CreateUserUseCase
+	authenticateSessionUseCase *usecase.AuthenticateSessionUseCase
+	loginUserUseCase           *usecase.LoginUserUseCase
+	createUserUseCase          *usecase.CreateUserUseCase
 }
 
 func NewHTTPServer(
 	log usecase.Logger,
 	port int,
+	transactionManager usecase.TransactionManager,
+	appCtxManager usecase.AppCtxManager,
 	broker usecase.EventBroker,
 
+	authenticateSessionUseCase *usecase.AuthenticateSessionUseCase,
+	loginUserUseCase *usecase.LoginUserUseCase,
 	createUserUseCase *usecase.CreateUserUseCase,
 ) *HTTPServer {
 	return &HTTPServer{
-		log:     log,
-		broker:  broker,
-		address: fmt.Sprintf(":%d", port),
+		log:                log,
+		address:            fmt.Sprintf(":%d", port),
+		transactionManager: transactionManager,
+		appCtxManager:      appCtxManager,
+		broker:             broker,
 
-		createUserUseCase: createUserUseCase,
+		authenticateSessionUseCase: authenticateSessionUseCase,
+		loginUserUseCase:           loginUserUseCase,
+		createUserUseCase:          createUserUseCase,
 	}
 }
 
@@ -39,17 +51,29 @@ func (e *HTTPServer) Run(ctx context.Context) {
 	engine := gin.New()
 
 	engine.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     []string{"http://localhost:5173"},
 		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowHeaders:     []string{"Content-Type"},
 		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
 	}))
 
+	// инициализировать middleware
+	authenticateSessionMiddleware := AuthenticateSessionMiddleware(
+		e.appCtxManager,
+		e.authenticateSessionUseCase,
+	)
+
 	// регистрация путей
-	e.userController().RegisterRoutes(engine)
-	e.sseController().RegisterRoutes(engine)
+	apiV1 := engine.Group("/api/v1")
+
+	authGroup := apiV1.Group("/auth")
+	authGroup.POST("/login", e.login)
+
+	userGroup := apiV1.Group("/users", authenticateSessionMiddleware)
+	userGroup.POST("", e.createUserHandler)
+
+	sseGroup := apiV1.Group("/events", authenticateSessionMiddleware)
+	sseGroup.GET("", e.sseHandler)
 
 	// создание сервера
 	srv := &http.Server{
@@ -75,18 +99,4 @@ func (e *HTTPServer) Run(ctx context.Context) {
 	// запуск сервера
 	e.log.Info("http-сервер запущен", "address", e.address)
 	srv.ListenAndServe()
-}
-
-func (e *HTTPServer) userController() *UserController {
-	return NewUserController(
-		e.log,
-		e.createUserUseCase,
-	)
-}
-
-func (e *HTTPServer) sseController() *SSEController {
-	return NewSSEController(
-		e.log,
-		e.broker,
-	)
 }

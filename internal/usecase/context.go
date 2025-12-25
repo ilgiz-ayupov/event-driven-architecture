@@ -9,17 +9,17 @@ func ApplyAppCtxOptions(
 	}
 }
 
-type withSession struct {
-	session Session
+type withTransaction struct {
+	ts Transaction
 }
 
-func (o withSession) apply(w AppCtxOptionWriter) {
-	w.SetSession(o.session)
+func (o withTransaction) apply(w AppCtxOptionWriter) {
+	w.SetTransaction(o.ts)
 }
 
-func WithSession(session Session) AppCtxOption {
-	if session == nil {
-		panic("session is nil")
+func WithTransaction(ts Transaction) AppCtxOption {
+	if ts == nil {
+		panic("transaction is nil")
 	}
-	return withSession{session: session}
+	return withTransaction{ts: ts}
 }

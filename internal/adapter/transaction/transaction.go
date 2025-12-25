@@ -1,4 +1,4 @@
-package session
+package transaction
 
 import (
 	"event-driven-architecture/internal/usecase"
@@ -6,16 +6,16 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type session struct {
+type transaction struct {
 	conn    *sqlx.DB
 	current *sqlx.Tx
 }
 
-func newSession(postgresConn *sqlx.DB) usecase.Session {
-	return &session{conn: postgresConn}
+func newTransaction(postgresConn *sqlx.DB) usecase.Transaction {
+	return &transaction{conn: postgresConn}
 }
 
-func (s *session) Start() error {
+func (s *transaction) Start() error {
 	if s.current != nil {
 		return nil
 	}
@@ -29,7 +29,7 @@ func (s *session) Start() error {
 	return nil
 }
 
-func (s *session) Commit() error {
+func (s *transaction) Commit() error {
 	if s.current == nil {
 		return nil
 	}
@@ -39,7 +39,7 @@ func (s *session) Commit() error {
 	return err
 }
 
-func (s *session) Rollback() error {
+func (s *transaction) Rollback() error {
 	if s.current == nil {
 		return nil
 	}
@@ -49,6 +49,6 @@ func (s *session) Rollback() error {
 	return err
 }
 
-func (s *session) Tx() *sqlx.Tx {
+func (s *transaction) Tx() *sqlx.Tx {
 	return s.current
 }
