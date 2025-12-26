@@ -7,7 +7,7 @@ var (
 	ErrNoData = errors.New("нет данных")
 	// ErrInvalidCredentials недействительные учетные данные
 	ErrInvalidCredentials = errors.New("недействительные учетные данные")
-	// ErrUnauthorized
+	// ErrUnauthorized неавторизованный
 	ErrUnauthorized = errors.New("неавторизованный")
 	// ErrInternalError внутрення ошибка
 	ErrInternalError = errors.New("внутренняя ошибка")

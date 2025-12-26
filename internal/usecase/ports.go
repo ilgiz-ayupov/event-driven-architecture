@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"event-driven-architecture/internal/domain"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -41,6 +42,11 @@ type Logger interface {
 	Info(msg string, args ...any)
 	Warn(msg string, args ...any)
 	Error(msg string, args ...any)
+}
+
+type DateTimeProvider interface {
+	Now() time.Time
+	NowDate() time.Time
 }
 
 type Event interface {

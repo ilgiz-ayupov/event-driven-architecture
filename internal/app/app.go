@@ -1,10 +1,6 @@
 package app
 
 import (
-	"context"
-	"log"
-
-	"event-driven-architecture/internal/adapter/appctx"
 	broker "event-driven-architecture/internal/adapter/event/broker/sse_broker"
 	"event-driven-architecture/internal/adapter/event/publisher"
 	"event-driven-architecture/internal/adapter/hasher"
@@ -13,107 +9,91 @@ import (
 	"event-driven-architecture/internal/adapter/repo/multi"
 	"event-driven-architecture/internal/adapter/repo/postgres"
 	"event-driven-architecture/internal/adapter/repo/rediscache"
-	"event-driven-architecture/internal/adapter/server"
-	"event-driven-architecture/internal/adapter/transaction"
+	"event-driven-architecture/internal/app/context/appctx"
+	"event-driven-architecture/internal/app/transaction"
 	"event-driven-architecture/internal/infrastructure"
 	"event-driven-architecture/internal/usecase"
-	"event-driven-architecture/pkg/envloader"
 )
 
 type App struct {
-	log                usecase.Logger
-	transactionManager usecase.TransactionManager
-	appCtxManager      usecase.AppCtxManager
-	sseBroker          usecase.EventBroker
+	Log           usecase.Logger
+	TxManager     usecase.TransactionManager
+	AppCtxManager usecase.AppCtxManager
+	SSEBroker     usecase.EventBroker
 
-	authenticateSessionUseCase *usecase.AuthenticateSessionUseCase
-	loginUserUseCase           *usecase.LoginUserUseCase
-	createUserUseCase          *usecase.CreateUserUseCase
+	AuthenticateSessionUseCase *usecase.AuthenticateSessionUseCase
+	LoginUserUseCase           *usecase.LoginUserUseCase
+	CreateUserUseCase          *usecase.CreateUserUseCase
 }
 
-func NewApp() *App {
-	// infrastructure
-	postgresConn, err := infrastructure.NewPostgres(envloader.MustGetString("POSTGRES_DNS"))
-	if err != nil {
-		log.Fatalln("не удалось подключиться к Postgres:", err)
-	}
-
-	redisClient, err := infrastructure.NewRedis(envloader.MustGetString("REDIS_ADDR"))
-	if err != nil {
-		log.Fatalln("не удалось подключиться к Redis:", err)
-	}
-
-	// adapters
+func Build(cfg Config) (*App, error) {
+	// --- infrastructure ---
 	log := logger.NewSlogLogger()
-	transactionManager := transaction.NewTransactionManager(postgresConn)
-	appCtxManager := appctx.NewAppCtxManager(envloader.GetDuration("APP_CTX_TIMEOUT", usecase.AppCtxDefaultTimeout))
 
-	uuidGenerator := id.NewUUIDGenerator()
-	bcryptHasher := hasher.NewBCrypt(envloader.GetInt("BCRYPT_COST", 12))
+	pgConn, err := infrastructure.NewPostgres(cfg.Postgres.DNS)
+	if err != nil {
+		return nil, err
+	}
 
-	userPostgresRepo := postgres.NewUser()
-	sessionPostgresRepo := postgres.NewSession()
-	sessionRedisRepo := rediscache.NewSession(redisClient)
-	sessionIndexRedisRepo := rediscache.NewSessionIndex(redisClient)
+	redisClient, err := infrastructure.NewRedis(cfg.Redis.Addr)
+	if err != nil {
+		return nil, err
+	}
 
+	// --- cross-cutting ---
+	txManager := transaction.NewManager(pgConn)
+	appCtxManager := appctx.NewManager(cfg.App.ContextTimeout)
+	uuidGen := id.NewUUIDGenerator()
+	bcryptHasher := hasher.NewBCrypt(cfg.Security.BcryptCost)
+
+	// --- repositories ---
+	// postgres
+	pgUserRepo := postgres.NewUser()
+
+	// redis
+	redisSessionIndexRepo := rediscache.NewSessionIndex(redisClient)
+
+	// multi
+	multiSessionRepo := multi.NewMultiSession(
+		rediscache.NewSession(redisClient),
+		postgres.NewSession(),
+	)
+
+	// -- events ---
 	sseBroker := broker.NewSSEBroker(log)
-	ssePublisher := publisher.NewSSEPublisher(sseBroker, sessionIndexRedisRepo)
+	ssePublisher := publisher.NewSSEPublisher(sseBroker, redisSessionIndexRepo)
 
-	// use-cases
-	authenticateSessionUseCase := usecase.NewAuthenticateSession(
+	// --- use-cases ---
+	createUserUseCase := usecase.NewCreateUser(
 		log,
-		sessionRedisRepo,
+		ssePublisher,
+		uuidGen,
+		bcryptHasher,
+		pgUserRepo,
 	)
 
 	loginUserUseCase := usecase.NewLoginUser(
 		log,
-		uuidGenerator,
+		uuidGen,
 		bcryptHasher,
-		userPostgresRepo,
-		multi.NewMultiSession(sessionRedisRepo, sessionPostgresRepo),
-		sessionIndexRedisRepo,
+		pgUserRepo,
+		multiSessionRepo,
+		redisSessionIndexRepo,
 	)
 
-	createUserUseCase := usecase.NewCreateUser(
+	authSessionUseCase := usecase.NewAuthenticateSession(
 		log,
-		ssePublisher,
-		uuidGenerator,
-		bcryptHasher,
-		userPostgresRepo,
+		multiSessionRepo,
 	)
 
 	return &App{
-		log:                log,
-		transactionManager: transactionManager,
-		appCtxManager:      appCtxManager,
-		sseBroker:          sseBroker,
+		Log:           log,
+		TxManager:     txManager,
+		AppCtxManager: appCtxManager,
+		SSEBroker:     sseBroker,
 
-		authenticateSessionUseCase: authenticateSessionUseCase,
-		loginUserUseCase:           loginUserUseCase,
-		createUserUseCase:          createUserUseCase,
-	}
-}
-
-func (a *App) Run() {
-	defer a.transactionManager.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// TODO: добавить обработку CTRL+C
-
-	a.server().Run(ctx)
-}
-
-func (a *App) server() *server.HTTPServer {
-	return server.NewHTTPServer(
-		a.log,
-		envloader.MustGetInt("PORT"),
-		a.transactionManager,
-		a.appCtxManager,
-		a.sseBroker,
-		a.authenticateSessionUseCase,
-		a.loginUserUseCase,
-		a.createUserUseCase,
-	)
+		AuthenticateSessionUseCase: authSessionUseCase,
+		LoginUserUseCase:           loginUserUseCase,
+		CreateUserUseCase:          createUserUseCase,
+	}, nil
 }
